@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PackageId>Moq.AutoMock.Signed</PackageId>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <Copyright>Copyright © $([System.DateTime]::UtcNow.ToString("yyyy"))</Copyright>
@@ -27,6 +28,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <PackageIcon>NuGetIcon.png</PackageIcon>
     <NoWarn>$(NoWarn);AMG0002</NoWarn>
+    <PackageReleaseNotes>Sign Moq.AutoMock</PackageReleaseNotes>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>..\SignKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
 
@@ -35,7 +40,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Moq" />
-    <PackageReference Include="NonBlocking" />
+    <PackageReference Include="NonBlocking.Signed" />
     <ProjectReference Include="../Generators/Generators.csproj">
       <OutputItemType>Analyzer</OutputItemType>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>

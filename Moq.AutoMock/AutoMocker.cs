@@ -66,9 +66,10 @@ public partial class AutoMocker : IServiceProvider
         DefaultValueProvider = defaultValueProvider;
         CallBase = callBase;
 
-        Resolvers = new List<IMockResolver>
-        {
+        Resolvers =
+        [
             new CacheResolver(),
+            new CallbackResolver(),
             new SelfResolver(),
             new ArrayResolver(),
             new AutoMockerDisposableResolver(),
@@ -77,7 +78,7 @@ public partial class AutoMocker : IServiceProvider
             new FuncResolver(),
             new CancellationTokenResolver(),
             new MockResolver(mockBehavior, defaultValue, defaultValueProvider, callBase)
-        };
+        ];
     }
 
     /// <summary>
@@ -121,14 +122,14 @@ public partial class AutoMocker : IServiceProvider
                 MockInstance mockInstance => mockInstance.Mock,
                 _ => kvp.Value.Value
             };
-        }) ?? new Dictionary<Type, object?>();
+        }) ?? [];
 
     private NonBlocking.ConcurrentDictionary<Type, IInstance>? TypeMap
         => Resolvers.OfType<CacheResolver>().FirstOrDefault()?.TypeMap;
 
     private bool TryResolve(Type serviceType,
         ObjectGraphContext resolutionContext,
-        [NotNullWhen(true)] out IInstance? instance, 
+        [NotNullWhen(true)] out IInstance? instance,
         out bool noCache)
     {
         if (resolutionContext.VisitedTypes.Contains(serviceType))
@@ -142,16 +143,16 @@ public partial class AutoMocker : IServiceProvider
         resolutionContext.VisitedTypes.Add(serviceType);
         var context = new MockResolutionContext(this, serviceType, resolutionContext);
 
-        List<IMockResolver> resolvers = new(Resolvers);
+        List<IMockResolver> resolvers = [.. Resolvers];
         for (int i = 0; i < resolvers.Count && !context.ValueProvided; i++)
         {
             try
             {
                 resolvers[i].Resolve(context);
             }
-            catch
+            catch (Exception ex)
             {
-                //TODO: Should we do anything with exceptions?
+                resolutionContext.AddDiagnosticMessage($"Resolver: {resolvers[i].GetType().FullName} threw an exception while attempting to resolve service of type {serviceType.AssemblyQualifiedName} {ex}");
             }
         }
 
@@ -236,7 +237,7 @@ public partial class AutoMocker : IServiceProvider
 
         try
         {
-            object?[] parameters = arguments.Select(x => x.Value).ToArray();
+            object?[] parameters = [.. arguments.Select(x => x.Value)];
             return ctor.Invoke(parameters);
         }
         catch (TargetInvocationException e)
@@ -480,7 +481,7 @@ public partial class AutoMocker : IServiceProvider
                 existingInstance is RealInstance realInstance &&
                 Equals(realInstance.Value, service))
             {
-                throw new InvalidOperationException("The service has already been added.");
+                throw new InvalidOperationException($"The service instance has already been added. You can safely remove this call to {nameof(AutoMocker)}.{nameof(Use)}");
             }
             typeMap[type] = new RealInstance(service);
         });
@@ -518,12 +519,49 @@ public partial class AutoMocker : IServiceProvider
     /// <typeparam name="TService">The type that the instance will be registered as</typeparam>
     /// <param name="setup">A shortcut for Mock.Of's syntax</param>
     /// <returns>Itself</returns>
+    /// <exception cref="ArgumentNullException">When the setup expression is null.</exception>
     public AutoMocker Use<TService>(Expression<Func<TService, bool>> setup)
         where TService : class
     {
         if (setup is null) throw new ArgumentNullException(nameof(setup));
 
         return Use(Mock.Get(Mock.Of(setup)));
+    }
+
+    /// <summary>
+    /// Adds a callback delegate to the container.
+    /// This delegate will be invoked when the service type is first requested.
+    /// The resulting value will be cached.
+    /// </summary>
+    /// <typeparam name="TService">The type that the instance will be registered as</typeparam>
+    /// <param name="factory">Teh factory callback.</param>
+    /// <returns>Itself</returns>
+    /// <exception cref="ArgumentNullException">When the factory is null.</exception>
+    public AutoMocker Use<TService>(Func<AutoMocker, TService> factory)
+        where TService : class
+    {
+        if (factory is null) throw new ArgumentNullException(nameof(factory));
+
+        CallbackResolver resolver = Resolvers.OfType<CallbackResolver>().FirstOrDefault()
+            ?? throw new InvalidOperationException($"The {nameof(CallbackResolver)} must be a registered resolver.");
+
+        resolver.AddCallback(factory);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a callback delegate to the container.
+    /// This delegate will be invoked when the service type is first requested.
+    /// The resulting value will be cached.
+    /// </summary>
+    /// <typeparam name="TService">The type that the instance will be registered as</typeparam>
+    /// <param name="factory">Teh factory callback.</param>
+    /// <returns>Itself</returns>
+    /// <exception cref="ArgumentNullException">When the factory is null.</exception>
+    public AutoMocker Use<TService>(Func<TService> factory)
+        where TService : class
+    {
+        return Use(_ => factory());
     }
 
     /// <summary>
@@ -869,7 +907,7 @@ public partial class AutoMocker : IServiceProvider
         {
             var method = mock.GetType().GetMethods().First(x => x.Name == nameof(Mock.As))
                 .MakeGenericMethod(forInterface);
-            return (Mock)method.Invoke(mock, Array.Empty<object>())!;
+            return (Mock)method.Invoke(mock, [])!;
         }
     }
 
@@ -1011,6 +1049,9 @@ public partial class AutoMocker : IServiceProvider
 
     #region Utilities
 
+    private static NonBlocking.ConcurrentDictionary<Type, bool> IsTypeMockable { get; } = new();
+
+
     internal Mock? CreateMock(Type serviceType, MockBehavior mockBehavior, DefaultValue defaultValue, DefaultValueProvider? defaultValueProvider, bool callBase, ObjectGraphContext objectGraphContext)
     {
         if (!serviceType.IsMockable())
@@ -1022,27 +1063,56 @@ public partial class AutoMocker : IServiceProvider
         bool mayHaveDependencies = serviceType.IsClass
                                    && !typeof(Delegate).IsAssignableFrom(serviceType);
 
-        object?[] constructorArgs = Array.Empty<object>();
+        object?[] constructorArgs = [];
+        ConstructorInfo? ctor = null;
         if (mayHaveDependencies &&
-            TryGetConstructorInvocation(serviceType, objectGraphContext, out ConstructorInfo? ctor, out IInstance[]? arguments))
+            TryGetConstructorInvocation(serviceType, objectGraphContext, out ctor, out IInstance[]? arguments))
         {
-            constructorArgs = arguments.Select(x => x.Value).ToArray();
+            constructorArgs = [.. arguments.Select(x => x.Value)];
         }
 
-        if (Activator.CreateInstance(mockType, mockBehavior, constructorArgs) is Mock mock)
+        if (mayHaveDependencies &&
+            ctor is null)
         {
-            if (defaultValueProvider is not null && defaultValue == DefaultValue.Custom)
+            bool isMockable = IsTypeMockable.GetOrAdd(serviceType, x =>
             {
-                mock.DefaultValueProvider = defaultValueProvider;
-            }
-            else
+                try
+                {
+                    // NB: Once you call Mock.Object you can no longer add inerfaces via As<TInterface>()
+                    // So this mock instance is just a sanity check, and then discarded.
+                    _ = GetMock()?.Object;
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            });
+            if (!isMockable)
             {
-                mock.DefaultValue = defaultValue;
+                return null;
             }
-            mock.CallBase = callBase;
-            return mock;
         }
-        return null;
+
+        return GetMock();
+
+        Mock? GetMock()
+        {
+            if (Activator.CreateInstance(mockType, mockBehavior, constructorArgs) is Mock mock)
+            {
+                if (defaultValueProvider is not null && defaultValue == DefaultValue.Custom)
+                {
+                    mock.DefaultValueProvider = defaultValueProvider;
+                }
+                else
+                {
+                    mock.DefaultValue = defaultValue;
+                }
+                mock.CallBase = callBase;
+                return mock;
+            }
+            return null;
+        }
     }
 
     internal bool TryGetConstructorInvocation(
@@ -1054,7 +1124,7 @@ public partial class AutoMocker : IServiceProvider
         IEnumerable<ConstructorInfo> constructors = type
             .GetConstructors(context.BindingFlags)
             .OrderByDescending(x => x.GetParameters().Length)
-            .Concat(new[] { Empty(type) })
+            .Concat([Empty(type)])
             .Where(x => x is not null)!;
 
         context.VisitedTypes.Add(type);
@@ -1081,7 +1151,7 @@ public partial class AutoMocker : IServiceProvider
             arguments = new IInstance[parameters.Length];
             for (int i = 0; i < parameters.Length; i++)
             {
-                ObjectGraphContext parameterContext = new(context);
+                ObjectGraphContext parameterContext = new(context, parameters[i]);
                 if (!TryGet(parameters[i].ParameterType, parameterContext, out IInstance? service, out bool noCache))
                 {
                     context.AddDiagnosticMessage($"Rejecting constructor {GetConstructorDisplayString(constructor)}, because {nameof(AutoMocker)} was unable to create parameter '{parameters[i].ParameterType.FullName} {parameters[i].Name}'");

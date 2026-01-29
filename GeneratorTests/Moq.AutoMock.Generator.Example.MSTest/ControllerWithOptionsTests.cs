@@ -1,7 +1,4 @@
-﻿using Microsoft.Extensions.Options;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-namespace Moq.AutoMock.Generator.Example.MSUnit;
+﻿namespace Moq.AutoMock.Generator.Example.MSUnit;
 [TestClass]
 public class ControllerWithOptionsTests
 {
@@ -10,10 +7,15 @@ public class ControllerWithOptionsTests
     {
         AutoMocker mocker = new();
         
-        mocker.WithOptions<TestsOptions>(options => options.Number = 42);
+        mocker.WithOptions<TestsOptions>(options => 
+        {
+            options.Number = 42;
+            options.Required = "Some Value";
+        });
 
         ControllerWithOptions controller = mocker.CreateInstance<ControllerWithOptions>();
 
         Assert.AreEqual(42, controller.Options.Value.Number);
+        Assert.AreEqual("Some Value", controller.Options.Value.Required);
     }
 }

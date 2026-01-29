@@ -2,26 +2,30 @@
 
 namespace Moq.AutoMocker.Generators;
 
-public class GeneratorTargetClass
+public sealed class GeneratorTargetClass
 {
+    public static GeneratorTargetClass Empty { get; } = new();
+
     public string? Namespace { get; set; }
     public string? TestClassName { get; set; }
 
     public SutClass? Sut { get; set; }
 
     public bool SkipNullableParameters { get; set; }
+
+    public Location? AttributeLocation { get; set; }
 }
 
 
-public class SutClass
+public sealed class SutClass
 {
     public string? Name { get; set; }
     public string? FullName { get; set; }
 
-    public List<NullConstructorParameterTest> NullConstructorParameterTests { get; } = new();
+    public List<NullConstructorParameterTest> NullConstructorParameterTests { get; } = [];
 }
 
-public class NullConstructorParameterTest
+public sealed class NullConstructorParameterTest
 {
     public List<Parameter>? Parameters { get; set; }
     public int NullParameterIndex { get; set; }
@@ -29,7 +33,7 @@ public class NullConstructorParameterTest
     public string? NullParameterName => Parameters?[NullParameterIndex].Name;
 }
 
-public class Parameter
+public sealed class Parameter
 {
     public Parameter(IParameterSymbol symbol)
     {

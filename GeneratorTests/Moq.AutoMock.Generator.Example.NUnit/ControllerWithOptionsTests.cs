@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Options;
-using NUnit.Framework;
+﻿using NUnit.Framework;
 
 namespace Moq.AutoMock.Generator.Example.NUnit;
 public class ControllerWithOptionsTests
@@ -9,10 +8,15 @@ public class ControllerWithOptionsTests
     {
         AutoMocker mocker = new();
         
-        mocker.WithOptions<TestsOptions>(options => options.Number = 42);
+        mocker.WithOptions<TestsOptions>(options => 
+        {
+            options.Number = 42;
+            options.Required = "Some Value";
+        });
 
         ControllerWithOptions controller = mocker.CreateInstance<ControllerWithOptions>();
 
         Assert.That(42 == controller.Options.Value.Number);
+        Assert.That("Some Value" == controller.Options.Value.Required);
     }
 }

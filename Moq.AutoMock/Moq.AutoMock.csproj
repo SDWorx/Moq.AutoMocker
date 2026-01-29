@@ -7,7 +7,7 @@
     <Copyright>Copyright © $([System.DateTime]::UtcNow.ToString("yyyy"))</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
 
-    <VersionPrefix Condition=" '$(VersionPrefix)' == '' ">3.6.0</VersionPrefix>
+    <VersionPrefix Condition="'$(VersionPrefix)' == ''">3.6.2</VersionPrefix>
 
     <Authors>Tim Kellogg, Adam Hewitt, Kevin Bost</Authors>
     <PackageDescription>An auto-mocking container that generates mocks using Moq</PackageDescription>
@@ -32,6 +32,10 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>..\SignKey.snk</AssemblyOriginatorKeyFile>
+
+    <!-- Package Validation -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <PackageValidationBaselineVersion>3.6.0</PackageValidationBaselineVersion>
   </PropertyGroup>
 
 
@@ -54,6 +58,7 @@
     <None Include="..\LICENSE" Pack="true" PackagePath="" />
     <Compile Include="..\System.Diagnostics.CodeAnalysis.cs" />
     <None Include="..\Moq.AutoMocker.Generators\bin\$(Configuration)\netstandard2.0\*.dll" Pack="True" PackagePath="analyzers\dotnet\cs" />
+    <None Include="build\Moq.AutoMock.Signed.props" Pack="true" PackagePath="build\" />
   </ItemGroup>
 
   <ItemGroup>

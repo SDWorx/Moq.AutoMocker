@@ -1,8 +1,4 @@
-﻿using System;
-using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq.AutoMock.Resolvers;
-using Moq.AutoMock.Tests.Util;
+﻿using Moq.AutoMock.Resolvers;
 
 namespace Moq.AutoMock.Tests;
 
@@ -65,7 +61,7 @@ public class DescribeUsingExplicitObjects
     {
         AutoMocker mocker = new();
 
-        var ex = Assert.ThrowsException<ArgumentNullException>(() => mocker.Use(null!, new object()));
+        var ex = Assert.Throws<ArgumentNullException>(() => mocker.Use(null!, new object()));
         Assert.AreEqual("type", ex.ParamName);
     }
 
@@ -74,7 +70,7 @@ public class DescribeUsingExplicitObjects
     {
         AutoMocker mocker = new();
 
-        var ex = Assert.ThrowsException<ArgumentException>(() => mocker.Use(typeof(int), new object()));
+        var ex = Assert.Throws<ArgumentException>(() => mocker.Use(typeof(int), new object()));
         Assert.AreEqual("service", ex.ParamName);
     }
 
@@ -84,7 +80,7 @@ public class DescribeUsingExplicitObjects
         AutoMocker mocker = new();
         mocker.Resolvers.Remove(mocker.Resolvers.OfType<CacheResolver>().Single());
 
-        Assert.ThrowsException<InvalidOperationException>(() => mocker.Use(typeof(object), new object()));
+        Assert.Throws<InvalidOperationException>(() => mocker.Use(typeof(object), new object()));
     }
 
     [TestMethod]
@@ -93,8 +89,8 @@ public class DescribeUsingExplicitObjects
         AutoMocker mocker = new();
         Service2 service = new();
         mocker.Use(service);
-        var ex = Assert.ThrowsException<InvalidOperationException>(() => mocker.Use(service));
-        Assert.AreEqual("The service has already been added.", ex.Message);
+        var ex = Assert.Throws<InvalidOperationException>(() => mocker.Use(service));
+        Assert.AreEqual($"The service instance has already been added. You can safely remove this call to AutoMocker.Use", ex.Message);
     }
 
     [TestMethod]
@@ -102,7 +98,7 @@ public class DescribeUsingExplicitObjects
     {
         AutoMocker mocker = new();
         Mock<IService1> service = mocker.GetMock<IService1>();
-        var ex = Assert.ThrowsException<InvalidOperationException>(() => mocker.Use(service));
+        var ex = Assert.Throws<InvalidOperationException>(() => mocker.Use(service));
         Assert.AreEqual("The service has already been added.", ex.Message);
     }
 
